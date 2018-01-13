@@ -129,7 +129,7 @@
 
 * #### then
 
-* #### catch
+* #### catch
 
 
 ### Static Method(静态方法)
