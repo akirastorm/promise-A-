@@ -25,8 +25,8 @@
  //利用Symbol值的唯一性，将私有方法的名字命名为一个Symbol值
 const _resolvePromise = Symbol('resolvePromise')
 
-export default class ES6Promise{
-    constructor(executor){
+class ES6Promise{
+    constructor(executor) {
         if (typeof executor !== 'function') {
             throw new TypeError('Promise resolver ' + executor + ' is not a function');
         }
@@ -39,7 +39,7 @@ export default class ES6Promise{
         this.onRejectedCallbacks = []
 
         function resolve (value) {
-            if (value instanceof MyPromise) {
+            if (value instanceof ES6Promise) {
                 return value.then(resolve, reject);
             }
             if (self.status === 'pending') {
@@ -65,6 +65,7 @@ export default class ES6Promise{
     }  
     
     [_resolvePromise](promise2, x, resolve, reject) {
+        let self = this
         if (promise2 === x) {
           return reject(new TypeError('循环引用'))
         }
@@ -77,7 +78,7 @@ export default class ES6Promise{
               then.call(x, function (y) {
                 if (called)return
                 called = true
-                this[_resolvePromise](promise2, y, resolve, reject);
+                self[_resolvePromise](promise2, y, resolve, reject)
               }, function (r) {
                 if (called)return
                 called = true
@@ -96,14 +97,14 @@ export default class ES6Promise{
         }
     }
 
-    then(onFulfilled, onRejected){
+    then(onFulfilled, onRejected) {
         let self = this
         typeof onFulfilled !== 'function' && (onFulfilled = function (value) {
             return value
-        });
+        })
         typeof onRejected !== 'function' && (onRejected = function (reason) {
             throw reason
-        });
+        })
         let newPromise
 
         if (self.status === 'fulfilled') {
@@ -111,7 +112,7 @@ export default class ES6Promise{
                 setTimeout(function () {
                     try {
                         let x = onFulfilled(self.value)
-                        resolutionPromise(newPromise, x, resolve, reject)
+                        self[_resolvePromise](newPromise, x, resolve, reject)
                     } catch (e) {
                         reject(e)
                     }
@@ -123,7 +124,7 @@ export default class ES6Promise{
                 setTimeout(function () {
                     try {
                         let x = onRejected(self.reason)
-                        resolutionPromise(newPromise, x, resolve, reject)
+                        self[_resolvePromise](newPromise, x, resolve, reject)
                     } catch (e) {
                         reject(e)
                     }
@@ -136,7 +137,7 @@ export default class ES6Promise{
                     setTimeout(function () {
                         try {
                             let x = onFulfilled(value)
-                            resolutionPromise(newPromise, x, resolve, reject)
+                            self[_resolvePromise](newPromise, x, resolve, reject)
                         } catch (e) {
                             reject(e)
                         }
@@ -146,7 +147,7 @@ export default class ES6Promise{
                     setTimeout(function () {
                         try {
                             let x = onRejected(reason)
-                            resolutionPromise(newPromise, x, resolve, reject)
+                            self[_resolvePromise](newPromise, x, resolve, reject)
                         } catch (e) {
                             reject(e)
                         }
@@ -160,4 +161,53 @@ export default class ES6Promise{
     catch(onRejected) {
         return this.then(undefined, onRejected)
     }
+
+    static all(promises) {
+        return new ES6Promise(function (resolve, reject) {
+            let result = []
+            let count = 0
+            promises.map((item, i) => {
+                item.then(data => {
+                    result[i] = data
+                    if (++count == promises.length) {
+                      resolve(result)
+                    }
+                }).catch(err => reject(err))
+            })
+        })
+    }
+
+    static race(promises) {
+        return new ES6Promise(function (resolve, reject) {
+            let result = []
+            let count = 0
+            promises.map((item, i) => {
+                if (!(item instanceof ES6Promise)) {
+                    item = ES6Promise.resolve(item);
+                }
+                item.then(data => {
+                    resolve(data)
+                }).catch(err => reject(err))
+            })
+        })
+    }
+
+    static resolve(value) {
+        if (value instanceof ES6Promise) {
+            return value
+        }
+        return new ES6Promise((resolve, reject)=> {
+            if (typeof value !== null && typeof value === 'object' && typeof value.then === 'function') {
+                value.then()
+            } else {
+                resolve(value)
+            }
+        })
+    }
+
+    static reject(e) {
+        return new ES6Promise((resolve,reject) => reject(e))
+    }
 }
+
+module.exports = ES6Promise
